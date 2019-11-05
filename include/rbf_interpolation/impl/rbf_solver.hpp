@@ -2,6 +2,7 @@
 #define RBF_INTERPOLATION_RBF_SOLVER_IMPL_H
 
 #include "rbf_interpolation/rbf_solver.h"
+#include <ros/console.h>
 
 namespace
 {
