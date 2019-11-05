@@ -1,30 +1,27 @@
-#include <rbf_interpolation/rbf_solver_impl.h>
-#include <rbf_interpolation/rbf_impl/gaussian_rbf.h>
-#include <rbf_interpolation/rbf_impl/inverse_multiquadric_rbf.h>
-#include <rbf_interpolation/rbf_impl/multiquadric_rbf.h>
-#include <rbf_interpolation/rbf_impl/polyharmonic_rbf.h>
-#include <rbf_interpolation/rbf_impl/thin_plate_spline_rbf.h>
+#include "rbf_interpolation/rbf_solver.h"
+#include "rbf_interpolation/impl/rbf/gaussian_rbf.hpp"
+#include "rbf_interpolation/impl/rbf/inverse_multiquadric_rbf.hpp"
+#include "rbf_interpolation/impl/rbf/multiquadric_rbf.hpp"
+#include "rbf_interpolation/impl/rbf/polyharmonic_rbf.hpp"
+#include "rbf_interpolation/impl/rbf/thin_plate_spline_rbf.hpp"
 
 #include <gtest/gtest.h>
-#include <ros/ros.h>
+#include <ros/console.h>
 
 namespace rbf_interpolation
 {
 using T = double;
-using RBFDataMap = DataMap<T>::type;
-using RBFVector = RBFVectorX<T>::type;
-using RBFMatrix = RBFMatrixX<T>::type;
 
 T surface(T x, T y)
 {
   return std::pow(x, 2.0) + std::pow(y, 2.0);
 }
 
-RBFDataMap generateKnots(const T range)
+DataMap<T> generateKnots(const T range)
 {
   std::size_t n = 10;
 
-  RBFDataMap out;
+  DataMap<T> out;
   out.reserve(n*n);
 
   for(std::size_t i = 0; i < n; ++i)
@@ -34,21 +31,21 @@ RBFDataMap generateKnots(const T range)
     {
       T y = -range / 2.0 + static_cast<T>(j / n) * range;
       T z = surface(x, y);
-      RBFVector knot;
+      RBFVectorX<T> knot;
       knot.resize(2);
       knot << x, y;
-      out.push_back(std::pair<T, RBFVector>(z, knot));
+      out.push_back(std::pair<T, RBFVectorX<T>>(z, knot));
     }
   }
 
   return out;
 }
 
-RBFMatrix generateEvalPoints(T range)
+RBFMatrixX<T> generateEvalPoints(T range)
 {
   std::size_t n = 100;
 
-  RBFMatrix out (n*n, 2);
+  RBFMatrixX<T> out (n*n, 2);
 
   for(std::size_t i = 0; i < n; ++i)
   {
@@ -63,13 +60,13 @@ RBFMatrix generateEvalPoints(T range)
   return out;
 }
 
-RBFMatrix mapToMatrix(const RBFDataMap& map)
+RBFMatrixX<T> mapToMatrix(const DataMap<T>& map)
 {
-  RBFMatrix matrix (map.size(), map.front().second.size());
+  RBFMatrixX<T> matrix (map.size(), map.front().second.size());
 
   for(std::size_t i = 0; i < map.size(); ++i)
   {
-    const std::pair<const T, RBFVector>& pair = map[i];
+    const std::pair<const T, RBFVectorX<T>>& pair = map[i];
     matrix.row(i) = pair.second.transpose();
   }
 
@@ -82,52 +79,52 @@ void testRBF(const RBFBase<T>::Ptr& rbf)
 
   // Sample some knots on the test surface
   T range = static_cast<T>(10.0);
-  RBFDataMap knots = generateKnots(range);
+  DataMap<T> knots = generateKnots(range);
   rbf_solver.setInputData(knots);
 
   // Calculate
   rbf_solver.calculateWeights();
 
   // Create points at which to evaluate the RBF representation of the surface
-  RBFMatrix eval_pts = generateEvalPoints(range);
+  RBFMatrixX<T> eval_pts = generateEvalPoints(range);
   std::vector<T> out = rbf_solver.calculateOutput(eval_pts);
 
   ASSERT_EQ(out.size(), eval_pts.rows()) << "Output is not the same size as the number of input evaluation points";
 
   // Check that the error at the knots is zero
-  RBFMatrix knots_matrix = mapToMatrix(knots);
+  RBFMatrixX<T> knots_matrix = mapToMatrix(knots);
   std::vector<T> test = rbf_solver.calculateOutput(knots_matrix);
 
   std::size_t i = 0;
-  for(const std::pair<T, RBFVector>& pair : knots)
+  for(const std::pair<T, RBFVectorX<T>>& pair : knots)
   {
     T error = pair.first - test[i];
-    ASSERT_TRUE(error < static_cast<T>(1e-6)) << "Error at knot " << i << " is " << error;
+    ASSERT_LT(error, std::numeric_limits<T>::epsilon()) << "Error at knot " << i << " is " << error;
     ++i;
   }
 }
 
 TEST(RBFTests, gaussianRBF)
 {
-  GaussianRBF<T>::Ptr rbf = GaussianRBF<T>::Ptr(new GaussianRBF<T>(10.0));
+  GaussianRBF<T>::Ptr rbf = GaussianRBF<T>::Ptr(new GaussianRBF<T>(1.0));
   testRBF(rbf);
 }
 
 TEST(RBFTests, inverseMultiquadricRBF)
 {
-  InverseMultiquadricRBF<T>::Ptr rbf = InverseMultiquadricRBF<T>::Ptr(new InverseMultiquadricRBF<T>(10.0));
+  InverseMultiquadricRBF<T>::Ptr rbf = InverseMultiquadricRBF<T>::Ptr(new InverseMultiquadricRBF<T>(1.0, 1.0));
   testRBF(rbf);
 }
 
 TEST(RBFTests, multiquadricRBF)
 {
-  MultiquadricRBF<T>::Ptr rbf = MultiquadricRBF<T>::Ptr(new MultiquadricRBF<T>(10.0));
+  MultiquadricRBF<T>::Ptr rbf = MultiquadricRBF<T>::Ptr(new MultiquadricRBF<T>(1.0, 1.0));
   testRBF(rbf);
 }
 
 TEST(RBFTests, polyharmonicRBF)
 {
-  PolyharmonicRBF<T>::Ptr rbf = PolyharmonicRBF<T>::Ptr(new PolyharmonicRBF<T>(3.0));
+  PolyharmonicRBF<T>::Ptr rbf = PolyharmonicRBF<T>::Ptr(new PolyharmonicRBF<T>(1.0));
   testRBF(rbf);
 }
 
@@ -142,7 +139,6 @@ TEST(RBFTests, thinPlateSplineRBF)
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
-  ros::init(argc, argv, "rbf_interpolation_test");
   ros::Time::init();
   return RUN_ALL_TESTS();
 }

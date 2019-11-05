@@ -45,6 +45,7 @@ if(CATKIN_ENABLE_TESTING)
     test/utest.cpp
   )
   target_link_libraries(${PROJECT_NAME}_test
+    ${PROJECT_NAME}
     ${catkin_LIBRARIES}
   )
 endif()
