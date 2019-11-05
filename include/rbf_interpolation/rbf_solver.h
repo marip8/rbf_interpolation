@@ -4,8 +4,7 @@
 #include <map>
 #include <functional>
 #include <memory>
-#include "rbf_base.h"
-#include <ros/console.h>
+#include "rbf_interpolation/rbf_base.h"
 
 namespace rbf_interpolation
 {
@@ -14,47 +13,46 @@ template <typename T>
 class RBFSolver
 {
 public:
-  using RBFVector = typename RBFVectorX<T>::type;
-  using RBFMatrix = typename RBFMatrixX<T>::type;
-  using RBFDataMap = typename DataMap<T>::type;
-  typedef typename RBFBase<T>::Ptr RBFBasePtr;
+  RBFSolver(const typename RBFBase<T>::Ptr rbf);
 
-  RBFSolver(const RBFBasePtr rbf);
+  /**
+   * @brief sets the knot_ vector and knot_values_ vector from the input map
+   * @param input
+   */
+  void setInputData(const DataMap<T>& input);
 
-  void setInputData(const RBFDataMap& input);
-
+  /**
+   * @brief calculate the weight vector
+   */
   void calculateWeights();
 
-  std::vector<T> calculateOutput(const RBFMatrix& eval_pts) const;
+  /**
+   * @brief calculates the interpolated values for the input matrix of input vectors
+   * @param eval_pts: the vectors at which to interpolate
+   * @return vector of interpolated values corresponding to the input vectors
+   */
+  std::vector<T> calculateOutput(const Eigen::Ref<RBFMatrixX<T>>& eval_pts) const;
 
 protected:
 
-  RBFBasePtr rbf_;
+  /** @brief radial basis function */
+  typename RBFBase<T>::Ptr rbf_;
 
-  /**
-   * @brief n_ the number of input RBF datapoints
-   */
+  /** @brief n_ the number of input RBF datapoints */
   std::size_t n_;
 
-  /**
-   * @brief d_ the dimensionality of the input knots
-   */
+  /** @brief d_ the dimensionality of the input knots */
   std::size_t d_;
 
-  /**
-   * @brief knots_ an n x dimensionality matrix of the input RBF knots
-   */
-  RBFMatrix knots_;
+  /** @brief knots_ an n x dimensionality matrix of the input RBF knots */
+  RBFMatrixX<T> knots_;
 
-  /**
-   * @brief knot_values_ a column vector of the scores associated with each corresponding knot
-   */
-  RBFMatrix knot_values_;
+  /** @brief knot_values_ a column vector of the scores associated with each corresponding knot */
+  RBFMatrixX<T> knot_values_;
 
-  RBFMatrix rbf_matrix_;
+  RBFMatrixX<T> rbf_matrix_;
 
-  RBFVector weights_;
-
+  RBFVectorX<T> weights_;
 };
 
 } // namespace rbf_interpolation

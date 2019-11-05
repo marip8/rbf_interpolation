@@ -1,28 +1,18 @@
 #ifndef RBF_INTERPOLATION_RBF_MATRIX_TYPES_H
 #define RBF_INTERPOLATION_RBF_MATRIX_TYPES_H
 
-#include <Eigen/Eigen>
+#include <Eigen/Geometry>
 
 namespace rbf_interpolation
 {
+template<typename T>
+using RBFVectorX = Eigen::Matrix<T, Eigen::Dynamic, 1>;
 
 template<typename T>
-struct RBFVectorX
-{
-  typedef typename Eigen::Matrix<T, Eigen::Dynamic, 1> type;
-};
+using RBFMatrixX = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
 
 template<typename T>
-struct RBFMatrixX
-{
-  typedef typename Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> type;
-};
-
-template<typename T>
-struct DataMap
-{
-  typedef typename std::vector<std::pair<const T, typename RBFVectorX<T>::type>> type;
-};
+using DataMap = std::vector < std::pair<const T, RBFVectorX<T>>>;
 
 } // namespace rbf_interpolation
 

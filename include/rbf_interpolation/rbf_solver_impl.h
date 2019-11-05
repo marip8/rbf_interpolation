@@ -1,20 +1,37 @@
 #ifndef RBF_INTERPOLATION_RBF_SOLVER_IMPL_H
 #define RBF_INTERPOLATION_RBF_SOLVER_IMPL_H
 
-#include "rbf_solver.h"
+#include "rbf_interpolation/rbf_solver.h"
+
+namespace
+{
+using namespace rbf_interpolation;
+
+template<typename T>
+RBFMatrixX<T> generatePolynomialTail(RBFMatrixX<T> in,
+                                     const unsigned power)
+{
+  RBFMatrixX<T> out(std::move(in));
+  for(std::size_t i = 0; i < out.size(); ++i)
+  {
+    out(i) = std::pow(out(i), power);
+  }
+
+  return out;
+}
+} // namespace anonymous
 
 namespace rbf_interpolation
 {
 
 template<typename T>
-RBFSolver<T>::RBFSolver(const RBFBasePtr rbf)
+RBFSolver<T>::RBFSolver(const typename RBFBase<T>::Ptr rbf)
   : rbf_(rbf)
 {
-
 }
 
 template<typename T>
-void RBFSolver<T>::setInputData(const RBFDataMap& input)
+void RBFSolver<T>::setInputData(const DataMap<T>& input)
 {
   ROS_DEBUG("Starting to save input data");
 
@@ -24,19 +41,21 @@ void RBFSolver<T>::setInputData(const RBFDataMap& input)
   ROS_DEBUG_STREAM("Size and dimensionality: " << n_ << " x " << d_);
 
   knots_.resize(n_, d_);
-  knot_values_.resize(n_ + d_ + 1, 1);
+
+  std::size_t size = n_ + (d_ * rbf_->order()) + 1;
+  knot_values_.resize(size, 1);
+
   std::size_t idx = 0;
 
   for(const auto& it : input)
-  {    
+  {
     knot_values_(idx) = it.first;
     knots_.row(idx) = it.second;
     ++idx;
   }
 
   // Set the last d_ + 1 elements to zero
-//  knot_values_.segment(n_, d_ + 1) = RBFVector::Zero(d_ + 1);
-  for(std::size_t i = n_; i < n_ + d_ + 1; ++i)
+  for(std::size_t i = n_; i < size; ++i)
   {
     knot_values_(i) = static_cast<T>(0.0);
   }
@@ -63,7 +82,7 @@ void RBFSolver<T>::calculateWeights()
    */
 
   // Resize the matrix
-  const std::size_t size = n_ + d_ + 1;
+  const std::size_t size = n_ + (d_ * rbf_->order()) + 1;
   rbf_matrix_.resize(size, size);
   weights_.resize(size);
 
@@ -77,26 +96,37 @@ void RBFSolver<T>::calculateWeights()
   }
 
   // Drop in the one vectors and input locators for the polynomial tail
-  rbf_matrix_.block(0, n_, n_, 1) = RBFVector::Ones(n_);
-  rbf_matrix_.block(n_, 0, 1, n_) = RBFVector::Ones(n_).transpose();
+  rbf_matrix_.block(0, n_, n_, 1) = RBFVectorX<T>::Ones(n_);
+  rbf_matrix_.block(n_, 0, 1, n_) = RBFVectorX<T>::Ones(n_).transpose();
 
-  rbf_matrix_.block(0, n_ + 1, n_, d_) = knots_;
-  rbf_matrix_.block(n_ + 1, 0, d_, n_) = knots_.transpose();
+  std::size_t col_start = n_ + 1;
+
+  for(std::size_t i = 1; i < rbf_->order(); ++i)
+  {
+    // Generate the polynomial tail for the current order
+    RBFMatrixX<T> tail = generatePolynomialTail(knots_, i);
+
+    rbf_matrix_.block(0, col_start, n_, d_) = tail;
+
+    // Add the transpose
+    rbf_matrix_.block(col_start, 0, d_, n_) = tail.transpose();
+
+    // Increase the column start by the dimensionality of the input variable
+    col_start += d_;
+  }
 
   // Set the bottom right (d_ + 1) x (d_ + 1) block to all zeros
-  rbf_matrix_.bottomRightCorner(d_ + 1, d_ + 1).setZero();
+  rbf_matrix_.bottomRightCorner((d_ * rbf_->order()) + 1, (d_ * rbf_->order()) + 1).setZero();
 
   // Get the weights by solving the matrix equation with the given input data
   // The RBF matrix should be positive definite, so a solver like LLT or LLDT should work
-//    weights_ = rbf_matrix_.llt().solve(knot_values_);
-//  weights_ = rbf_matrix_.ldlt().solve(knot_values_);
   weights_ = rbf_matrix_.fullPivLu().solve(knot_values_);
 
   ROS_DEBUG_STREAM("Finished calculating weights (" << (ros::Time::now() - start).toSec()<< " sec)"); //: \n" << weights_);
 }
 
 template<typename T>
-std::vector<T> RBFSolver<T>::calculateOutput(const RBFMatrix& eval_pts) const
+std::vector<T> RBFSolver<T>::calculateOutput(const Eigen::Ref<RBFMatrixX<T>>& eval_pts) const
 {
   ROS_DEBUG("Starting output calculation");
 
@@ -112,15 +142,15 @@ std::vector<T> RBFSolver<T>::calculateOutput(const RBFMatrix& eval_pts) const
   {
     for(std::size_t i = 0; i < eval_pts.rows(); ++i)
     {
-      const RBFVector& pt = eval_pts.row(i);
+      const RBFVectorX<T>& pt = eval_pts.row(i);
 
       // Create a column vector for the evaluation of the RBF at each input point
-      RBFVector r;
+      RBFVectorX<T> r;
       r.resize(n_ + d_ + 1);
 
       for(std::size_t j = 0; j < n_; ++j)
       {
-        const RBFVector& center = knots_.row(j);
+        const RBFVectorX<T>& center = knots_.row(j);
 
         if(pt.size() != center.size())
         {
