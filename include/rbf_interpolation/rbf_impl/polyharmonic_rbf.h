@@ -7,30 +7,36 @@ namespace rbf_interpolation
 {
 
 /**
- * @brief Radial basis function of the class phi(x) = (||x-c||)^k
+ * @brief Radial basis function of the class \f$\phi(x) = (||x-c||)^(2*k - 1)\f$
  */
 template<typename T>
 class PolyharmonicRBF : public RBFBase<T>
 {
 public:
   typedef typename std::shared_ptr<PolyharmonicRBF> Ptr;
-  using Vector = typename RBFVectorX<T>::type;
 
-  PolyharmonicRBF(const T k)
-    : k_(k)
+  inline explicit PolyharmonicRBF(const T k = static_cast<T>(1.0))
+    : k_(std::abs(k))
   {
 
   }
 
-  T calculate(const Vector& pt, const Vector& center) const override
+  inline virtual T calculate(const Eigen::Ref<RBFVectorX<T>>& pt,
+                             const Eigen::Ref<RBFVectorX<T>>& center) const override
   {
-    Vector vec = pt - center;
+    RBFVectorX<T> vec = pt - center;
     T r = vec.norm();
-    return std::pow(r, k_);
+    T exponent = static_cast<T>(2.0) * k_ - static_cast<T>(1.0);
+    return std::pow(r, exponent);
+  }
+
+  inline virtual unsigned order() const override
+  {
+    return std::ceil(k_);
   }
 
 protected:
-
+  /** @brief order on [1, inf) */
   T k_;
 };
 
