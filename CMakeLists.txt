@@ -12,6 +12,8 @@ find_package(Eigen3 REQUIRED)
 catkin_package(
   INCLUDE_DIRS
     include
+  LIBRARIES
+    ${PROJECT_NAME}
   CATKIN_DEPENDS
     roscpp
 )
@@ -24,6 +26,14 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
+)
+
+add_library(${PROJECT_NAME}
+  src/rbf.cpp
+  src/rbf_solver.cpp
+)
+target_link_libraries(${PROJECT_NAME}
+  ${catkin_LIBRARIES}
 )
 
 #############
